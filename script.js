@@ -286,7 +286,56 @@ window.onload = () => {
         displayResultsAsDrawings(sheetSequence, totalLength);
     }
     
-    function optimizeSheetUsage(totalLength) {
+
+
+
+          /**
+ * Otimiza o uso de chapas para um determinado comprimento total.
+ * A lógica prioriza chapas de 3m, mas de forma inteligente para minimizar o desperdício.
+ * Chapas disponíveis: 3m e 2m.
+ *
+ * @param {number} totalLength O comprimento total da obra em metros.
+ * @returns {number[]} Um array com a sequência de comprimentos das peças.
+ */
+function optimizeSheetUsage(totalLength) {
+    const sheets = [];
+    let remainingLength = totalLength;
+
+    // O loop continua enquanto houver comprimento para processar.
+    // O 0.01 é uma tolerância para evitar problemas com ponto flutuante.
+    while (remainingLength > 0.01) {
+        
+        // --- LÓGICA PRINCIPAL ---
+
+        // Se o comprimento restante for de 3m ou menos, ele se torna a última peça.
+        // Isso evita criar sobras pequenas (ex: para 2.5m, usamos uma peça de 2.5m ao invés de 2m + 0.5m).
+        if (remainingLength <= 3) {
+            sheets.push(parseFloat(remainingLength.toFixed(2)));
+            remainingLength = 0; // Finaliza o cálculo
+        }
+        // Caso especial: 4 metros. A melhor combinação é 2m + 2m, não 3m + 1m.
+        // Se pegássemos uma de 3m, sobraria 1m, o que é um desperdício.
+        else if (remainingLength === 4) {
+            sheets.push(2);
+            remainingLength -= 2;
+        }
+        // Regra geral: Se o comprimento for maior que 3m (e não for o caso especial de 4m),
+        // usamos a maior chapa disponível (3m) de forma segura.
+        else {
+            sheets.push(3);
+            remainingLength -= 3;
+        }
+    }
+    return sheets;
+}
+
+
+
+
+
+        // Antiga funçao de calculo de chapa
+
+    /*function optimizeSheetUsage(totalLength) {
         const sheets = [];
         let remainingLength = totalLength;
         while (remainingLength > 0.01) {
@@ -297,6 +346,11 @@ window.onload = () => {
         }
         return sheets;
     }
+
+*/
+
+
+
     
     // <<-- FUNÇÃO MODIFICADA -->>
     function displayResultsAsDrawings(sheetSequence, totalLength) {
