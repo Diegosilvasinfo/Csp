@@ -2,44 +2,53 @@
 
 import * as dom from './dom.js';
 import * as state from './state.js';
+import { getIntersection, isPointInProfile } from './utils.js';
 
+/**
+ * Função de desenho principal interativa.
+ */
 export function redraw() {
     dom.ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
     dom.ctx.lineCap = 'round';
     dom.ctx.lineJoin = 'round';
 
+    if (state.mousePosition && state.modoDesenhoAtivo) {
+        dom.ctx.save();
+        dom.ctx.strokeStyle = '#a9a9a9';
+        dom.ctx.lineWidth = 0.5;
+        dom.ctx.setLineDash([4, 4]);
+        dom.ctx.beginPath();
+        dom.ctx.moveTo(0, state.mousePosition.y);
+        dom.ctx.lineTo(dom.canvas.width, state.mousePosition.y);
+        dom.ctx.stroke();
+        dom.ctx.beginPath();
+        dom.ctx.moveTo(state.mousePosition.x, 0);
+        dom.ctx.lineTo(state.mousePosition.x, dom.canvas.height);
+        dom.ctx.stroke();
+        dom.ctx.restore();
+    }
+
+    for (let i = 0; i < state.profiles.length; i++) {
+        const profileToDraw = state.profiles[i];
+        for (const segmentToDraw of profileToDraw.segments) {
+            const intersectionData = [];
+            for (let j = i + 1; j < state.profiles.length; j++) {
+                const otherProfile = state.profiles[j];
+                for (const otherSegment of otherProfile.segments) {
+                    const point = getIntersection(segmentToDraw, otherSegment);
+                    if (point) {
+                        intersectionData.push({ point, occludingProfile: otherProfile });
+                    }
+                }
+            }
+            drawIntersectedSegment(dom.ctx, segmentToDraw, intersectionData);
+        }
+    }
+
     state.profiles.forEach(profile => {
         profile.segments.forEach(seg => {
-            dom.ctx.lineWidth = seg.lineWidth;
-            dom.ctx.strokeStyle = (seg === state.hoveredSegment || seg === state.hoveredTextSegment) && !state.modoDesenhoAtivo ? '#007bff' : '#000000';
-            dom.ctx.beginPath();
-            dom.ctx.moveTo(seg.start.x, seg.start.y);
-            dom.ctx.lineTo(seg.end.x, seg.end.y);
-            dom.ctx.stroke();
-
             if (seg.measurement) {
-                const midX = (seg.start.x + seg.end.x) / 2;
-                const midY = (seg.start.y + seg.end.y) / 2;
-                const angle = Math.atan2(seg.end.y - seg.start.y, seg.end.x - seg.start.x);
-                
-                dom.ctx.font = 'bold 14px Arial';
-                const isVariable = seg.measurement.type === 'variable_start' || seg.measurement.type === 'variable_end';
-                dom.ctx.fillStyle = isVariable ? '#d93025' : '#1a73e8';
-                dom.ctx.textAlign = 'center';
-                dom.ctx.textBaseline = 'middle';
-                let text = seg.measurement.text;
-                
-                dom.ctx.save();
-                dom.ctx.translate(midX, midY);
-                dom.ctx.rotate(angle);
-
-                const isUpsideDown = angle > Math.PI / 2 || angle < -Math.PI / 2;
-                if (isUpsideDown) { 
-                    dom.ctx.rotate(Math.PI);
-                }
-                
-                dom.ctx.fillText(text, seg.measurement.offsetX, seg.measurement.offsetY);
-                dom.ctx.restore();
+                drawMeasurementText(dom.ctx, seg);
             }
         });
     });
@@ -54,8 +63,115 @@ export function redraw() {
         dom.ctx.lineTo(pv[2].x, pv[2].y); dom.ctx.lineTo(pv[3].x, pv[3].y);
         dom.ctx.closePath(); dom.ctx.stroke(); dom.ctx.setLineDash([]);
     }
+
     requestAnimationFrame(redraw);
 }
+
+
+function drawIntersectedSegment(ctx, segment, intersectionData) {
+    const { start, end } = segment;
+
+    ctx.lineWidth = segment.lineWidth;
+    ctx.strokeStyle = (segment === state.hoveredSegment || segment === state.hoveredTextSegment) && !state.modoDesenhoAtivo ? '#007bff' : '#000000';
+    ctx.setLineDash([]);
+
+    if (intersectionData.length === 0) {
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+        return;
+    }
+
+    let closestData = null;
+    let minDistanceSq = Infinity;
+    for (const data of intersectionData) {
+        const distSq = (data.point.x - start.x)**2 + (data.point.y - start.y)**2;
+        if (distSq < minDistanceSq) {
+            minDistanceSq = distSq;
+            closestData = data;
+        }
+    }
+
+    const closestIntersection = closestData.point;
+    const occludingProfile = closestData.occludingProfile;
+
+    const testPoint1 = { x: (start.x + closestIntersection.x) / 2, y: (start.y + closestIntersection.y) / 2 };
+    const startHalfIsHidden = isPointInProfile(testPoint1, occludingProfile);
+
+    if (startHalfIsHidden) {
+        ctx.beginPath();
+        ctx.setLineDash([4, 4]);
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(closestIntersection.x, closestIntersection.y);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.setLineDash([]);
+        ctx.moveTo(closestIntersection.x, closestIntersection.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+    } else {
+        ctx.beginPath();
+        ctx.setLineDash([]);
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(closestIntersection.x, closestIntersection.y);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.setLineDash([4, 4]);
+        ctx.moveTo(closestIntersection.x, closestIntersection.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+    }
+}
+
+/**
+ * ==============================================================================
+ * ===================== FUNÇÃO DE DESENHO DE TEXTO ATUALIZADA ====================
+ * ==============================================================================
+ */
+function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
+    const startX = seg.start.x * scale + offsetX;
+    const startY = seg.start.y * scale + offsetY;
+    const endX = seg.end.x * scale + offsetX;
+    const endY = seg.end.y * scale + offsetY;
+
+    const midX = (startX + endX) / 2;
+    const midY = (startY + endY) / 2;
+    const angle = Math.atan2(endY - startY, endX - startX);
+    
+    ctx.font = 'bold 14px Arial';
+    const isVariable = seg.measurement.type === 'variable_start' || seg.measurement.type === 'variable_end';
+    ctx.fillStyle = isVariable ? '#d93025' : '#1a73e8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let text = seg.measurement.text;
+    
+    ctx.save();
+    ctx.translate(midX, midY);
+
+    const absAngle = Math.abs(angle);
+    const isVerticalish = absAngle > Math.PI / 4 && absAngle < (3 * Math.PI) / 4;
+
+    if (isVerticalish) {
+        // --- MUDANÇA PRINCIPAL AQUI ---
+        // Para linhas verticais, NÃO rotacionamos o texto.
+        // Ele será desenhado "em pé" (horizontal) para máxima clareza.
+        // A linha "ctx.rotate(...)" foi removida deste bloco.
+    } else {
+        // Para linhas horizontais ou inclinadas, mantém a rotação normal.
+        ctx.rotate(angle);
+        const isUpsideDown = angle > Math.PI / 2 || angle < -Math.PI / 2;
+        if (isUpsideDown) { 
+            ctx.rotate(Math.PI);
+        }
+    }
+    
+    ctx.fillText(text, seg.measurement.offsetX, seg.measurement.offsetY);
+    ctx.restore();
+}
+
 
 export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
     const pieceCtx = targetCanvas.getContext('2d');
@@ -78,41 +194,72 @@ export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
     const offsetY = (targetCanvas.height - drawingHeight * scale) / 2 - minY * scale;
 
     pieceCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+
+    function drawScaledSegment(ctx, segment, style) {
+        const startX = segment.start.x * scale + offsetX;
+        const startY = segment.start.y * scale + offsetY;
+        const endX = segment.end.x * scale + offsetX;
+        const endY = segment.end.y * scale + offsetY;
+        
+        ctx.beginPath();
+        ctx.setLineDash(style === 'dashed' ? [4, 4] : []);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    }
+    
+    for (let i = 0; i < allProfiles.length; i++) {
+        const profileToDraw = allProfiles[i];
+        for (const segmentToDraw of profileToDraw.segments) {
+            
+            pieceCtx.lineWidth = segmentToDraw.lineWidth;
+            pieceCtx.strokeStyle = '#333';
+
+            const intersectionData = [];
+            for (let j = i + 1; j < allProfiles.length; j++) {
+                const otherProfile = allProfiles[j];
+                for (const otherSegment of otherProfile.segments) {
+                    const point = getIntersection(segmentToDraw, otherSegment);
+                    if (point) {
+                        intersectionData.push({ point, occludingProfile: otherProfile });
+                    }
+                }
+            }
+
+            if (intersectionData.length === 0) {
+                drawScaledSegment(pieceCtx, segmentToDraw, 'solid');
+                continue;
+            }
+
+            let closestData = null;
+            let minDistanceSq = Infinity;
+            for (const data of intersectionData) {
+                const distSq = (data.point.x - segmentToDraw.start.x)**2 + (data.point.y - segmentToDraw.start.y)**2;
+                if (distSq < minDistanceSq) {
+                    minDistanceSq = distSq;
+                    closestData = data;
+                }
+            }
+            
+            const closestIntersection = closestData.point;
+            const occludingProfile = closestData.occludingProfile;
+            const testPoint1 = { x: (segmentToDraw.start.x + closestIntersection.x) / 2, y: (segmentToDraw.start.y + closestIntersection.y) / 2 };
+            const startHalfIsHidden = isPointInProfile(testPoint1, occludingProfile);
+
+            if (startHalfIsHidden) {
+                drawScaledSegment(pieceCtx, { start: segmentToDraw.start, end: closestIntersection }, 'dashed');
+                drawScaledSegment(pieceCtx, { start: closestIntersection, end: segmentToDraw.end }, 'solid');
+            } else {
+                drawScaledSegment(pieceCtx, { start: segmentToDraw.start, end: closestIntersection }, 'solid');
+                drawScaledSegment(pieceCtx, { start: closestIntersection, end: segmentToDraw.end }, 'dashed');
+            }
+        }
+    }
+    
     allProfiles.forEach(p => {
         p.segments.forEach(seg => {
-            const startX = seg.start.x * scale + offsetX;
-            const startY = seg.start.y * scale + offsetY;
-            const endX = seg.end.x * scale + offsetX;
-            const endY = seg.end.y * scale + offsetY;
-
-            pieceCtx.beginPath();
-            pieceCtx.moveTo(startX, startY);
-            pieceCtx.lineTo(endX, endY);
-            pieceCtx.lineWidth = 3;
-            pieceCtx.strokeStyle = '#333';
-            pieceCtx.stroke();
-
             if (seg.measurement) {
-                const midX = (startX + endX) / 2;
-                const midY = (startY + endY) / 2;
-                const angle = Math.atan2(endY - startY, endX - startX);
-
-                pieceCtx.font = 'bold 14px Arial';
-                pieceCtx.fillStyle = (seg.measurement.type === 'variable_start' || seg.measurement.type === 'variable_end') ? '#d93025' : '#1a73e8';
-                pieceCtx.textAlign = 'center';
-                pieceCtx.textBaseline = 'middle';
-
-                pieceCtx.save();
-                pieceCtx.translate(midX, midY);
-                pieceCtx.rotate(angle);
-                
-                const isUpsideDown = angle > Math.PI / 2 || angle < -Math.PI / 2;
-                if (isUpsideDown) {
-                    pieceCtx.rotate(Math.PI);
-                }
-
-                pieceCtx.fillText(`${seg.measurement.text}`, seg.measurement.offsetX, seg.measurement.offsetY);
-                pieceCtx.restore();
+                drawMeasurementText(pieceCtx, seg, scale, offsetX, offsetY);
             }
         });
     });

@@ -12,6 +12,9 @@ export let hoveredSegment = null;
 export let isDraggingText = false;
 export let draggedSegment = null;
 export let hoveredTextSegment = null;
+// ADICIONE ESTAS DUAS LINHAS ABAIXO
+export let mousePosition = null; // Inicia como nulo
+export function setMousePosition(pos) { mousePosition = pos; }
 
 // Funções para modificar o estado de forma controlada
 export function setModoDesenhoAtivo(value) { modoDesenhoAtivo = value; }
@@ -26,3 +29,4 @@ export function setHoveredTextSegment(segment) { hoveredTextSegment = segment; }
 export function addProfile(profile) { profiles.push(profile); }
 export function popProfile() { return profiles.pop(); }
 export function clearProfiles() { profiles.length = 0; }
+
