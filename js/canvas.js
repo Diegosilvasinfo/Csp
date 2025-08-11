@@ -5,13 +5,14 @@ import * as state from './state.js';
 import { getIntersection, isPointInProfile } from './utils.js';
 
 /**
- * Função de desenho principal interativa.
+ * Função de desenho principal que chama a nova lógica de renderização.
  */
 export function redraw() {
     dom.ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
     dom.ctx.lineCap = 'round';
     dom.ctx.lineJoin = 'round';
 
+    // Desenha as guias do mouse se estiver em modo de desenho
     if (state.mousePosition && state.modoDesenhoAtivo) {
         dom.ctx.save();
         dom.ctx.strokeStyle = '#a9a9a9';
@@ -28,23 +29,17 @@ export function redraw() {
         dom.ctx.restore();
     }
 
+    // --- MUDANÇA PRINCIPAL NA LÓGICA DE DESENHO ---
     for (let i = 0; i < state.profiles.length; i++) {
         const profileToDraw = state.profiles[i];
+        const allLaterProfiles = state.profiles.slice(i + 1); // Pega todos os perfis que vêm depois
+
         for (const segmentToDraw of profileToDraw.segments) {
-            const intersectionData = [];
-            for (let j = i + 1; j < state.profiles.length; j++) {
-                const otherProfile = state.profiles[j];
-                for (const otherSegment of otherProfile.segments) {
-                    const point = getIntersection(segmentToDraw, otherSegment);
-                    if (point) {
-                        intersectionData.push({ point, occludingProfile: otherProfile });
-                    }
-                }
-            }
-            drawIntersectedSegment(dom.ctx, segmentToDraw, intersectionData);
+            drawSegmentWithMultipleIntersections(dom.ctx, segmentToDraw, allLaterProfiles);
         }
     }
 
+    // Desenha os textos das medidas por cima de tudo
     state.profiles.forEach(profile => {
         profile.segments.forEach(seg => {
             if (seg.measurement) {
@@ -53,6 +48,7 @@ export function redraw() {
         });
     });
 
+    // Desenha o perfil de pré-visualização
     if (state.isDrawing && state.previewPath) {
         dom.ctx.lineWidth = state.previewPath.lineWidth;
         dom.ctx.strokeStyle = '#007bff';
@@ -68,68 +64,71 @@ export function redraw() {
 }
 
 
-function drawIntersectedSegment(ctx, segment, intersectionData) {
-    const { start, end } = segment;
+/**
+ * NOVA FUNÇÃO: Desenha um segmento, considerando TODAS as interseções possíveis.
+ * @param {CanvasRenderingContext2D} ctx - O contexto do canvas.
+ * @param {object} segment - O segmento a ser desenhado.
+ * @param {Array<object>} occludingProfiles - Array de perfis que podem estar sobrepondo o segmento.
+ */
+function drawSegmentWithMultipleIntersections(ctx, segment, occludingProfiles) {
+    const intersectionPoints = [];
+    occludingProfiles.forEach(profile => {
+        profile.segments.forEach(otherSegment => {
+            const point = getIntersection(segment, otherSegment);
+            if (point) {
+                intersectionPoints.push(point);
+            }
+        });
+    });
 
     ctx.lineWidth = segment.lineWidth;
     ctx.strokeStyle = (segment === state.hoveredSegment || segment === state.hoveredTextSegment) && !state.modoDesenhoAtivo ? '#007bff' : '#000000';
-    ctx.setLineDash([]);
 
-    if (intersectionData.length === 0) {
+    if (intersectionPoints.length === 0) {
         ctx.beginPath();
-        ctx.moveTo(start.x, start.y);
-        ctx.lineTo(end.x, end.y);
+        ctx.setLineDash([]);
+        ctx.moveTo(segment.start.x, segment.start.y);
+        ctx.lineTo(segment.end.x, segment.end.y);
         ctx.stroke();
         return;
     }
 
-    let closestData = null;
-    let minDistanceSq = Infinity;
-    for (const data of intersectionData) {
-        const distSq = (data.point.x - start.x)**2 + (data.point.y - start.y)**2;
-        if (distSq < minDistanceSq) {
-            minDistanceSq = distSq;
-            closestData = data;
+    // Cria uma lista de todos os pontos notáveis (início, fim e interseções)
+    const allPoints = [segment.start, ...intersectionPoints, segment.end];
+
+    // Ordena os pontos pela distância do ponto inicial do segmento
+    allPoints.sort((a, b) => {
+        const distA = Math.hypot(a.x - segment.start.x, a.y - segment.start.y);
+        const distB = Math.hypot(b.x - segment.start.x, b.y - segment.start.y);
+        return distA - distB;
+    });
+    
+    // Desenha cada sub-segmento entre os pontos ordenados
+    for (let i = 0; i < allPoints.length - 1; i++) {
+        const subStart = allPoints[i];
+        const subEnd = allPoints[i+1];
+        
+        // Verifica se o meio deste sub-segmento está oculto
+        const midPoint = { x: (subStart.x + subEnd.x) / 2, y: (subStart.y + subEnd.y) / 2 };
+        let isHidden = false;
+        for (const profile of occludingProfiles) {
+            if (isPointInProfile(midPoint, profile)) {
+                isHidden = true;
+                break;
+            }
         }
-    }
 
-    const closestIntersection = closestData.point;
-    const occludingProfile = closestData.occludingProfile;
-
-    const testPoint1 = { x: (start.x + closestIntersection.x) / 2, y: (start.y + closestIntersection.y) / 2 };
-    const startHalfIsHidden = isPointInProfile(testPoint1, occludingProfile);
-
-    if (startHalfIsHidden) {
         ctx.beginPath();
-        ctx.setLineDash([4, 4]);
-        ctx.moveTo(start.x, start.y);
-        ctx.lineTo(closestIntersection.x, closestIntersection.y);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.setLineDash([]);
-        ctx.moveTo(closestIntersection.x, closestIntersection.y);
-        ctx.lineTo(end.x, end.y);
-        ctx.stroke();
-    } else {
-        ctx.beginPath();
-        ctx.setLineDash([]);
-        ctx.moveTo(start.x, start.y);
-        ctx.lineTo(closestIntersection.x, closestIntersection.y);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.setLineDash([4, 4]);
-        ctx.moveTo(closestIntersection.x, closestIntersection.y);
-        ctx.lineTo(end.x, end.y);
+        ctx.setLineDash(isHidden ? [4, 4] : []);
+        ctx.moveTo(subStart.x, subStart.y);
+        ctx.lineTo(subEnd.x, subEnd.y);
         ctx.stroke();
     }
 }
 
+
 /**
- * ==============================================================================
- * ===================== FUNÇÃO DE DESENHO DE TEXTO ATUALIZADA ====================
- * ==============================================================================
+ * Função para desenhar o texto da medida (sem alterações, mas mantida aqui).
  */
 function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
     const startX = seg.start.x * scale + offsetX;
@@ -155,12 +154,8 @@ function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
     const isVerticalish = absAngle > Math.PI / 4 && absAngle < (3 * Math.PI) / 4;
 
     if (isVerticalish) {
-        // --- MUDANÇA PRINCIPAL AQUI ---
-        // Para linhas verticais, NÃO rotacionamos o texto.
-        // Ele será desenhado "em pé" (horizontal) para máxima clareza.
-        // A linha "ctx.rotate(...)" foi removida deste bloco.
+        // Não rotaciona texto em linhas verticais
     } else {
-        // Para linhas horizontais ou inclinadas, mantém a rotação normal.
         ctx.rotate(angle);
         const isUpsideDown = angle > Math.PI / 2 || angle < -Math.PI / 2;
         if (isUpsideDown) { 
@@ -172,7 +167,9 @@ function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
     ctx.restore();
 }
 
-
+/**
+ * Função para desenhar o perfil completo em um canvas de resultado (sem alterações).
+ */
 export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
     const pieceCtx = targetCanvas.getContext('2d');
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -194,65 +191,26 @@ export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
     const offsetY = (targetCanvas.height - drawingHeight * scale) / 2 - minY * scale;
 
     pieceCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
-
-    function drawScaledSegment(ctx, segment, style) {
-        const startX = segment.start.x * scale + offsetX;
-        const startY = segment.start.y * scale + offsetY;
-        const endX = segment.end.x * scale + offsetX;
-        const endY = segment.end.y * scale + offsetY;
-        
-        ctx.beginPath();
-        ctx.setLineDash(style === 'dashed' ? [4, 4] : []);
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-    }
     
     for (let i = 0; i < allProfiles.length; i++) {
         const profileToDraw = allProfiles[i];
+        const allLaterProfiles = allProfiles.slice(i + 1);
+
         for (const segmentToDraw of profileToDraw.segments) {
-            
             pieceCtx.lineWidth = segmentToDraw.lineWidth;
             pieceCtx.strokeStyle = '#333';
-
-            const intersectionData = [];
-            for (let j = i + 1; j < allProfiles.length; j++) {
-                const otherProfile = allProfiles[j];
-                for (const otherSegment of otherProfile.segments) {
-                    const point = getIntersection(segmentToDraw, otherSegment);
-                    if (point) {
-                        intersectionData.push({ point, occludingProfile: otherProfile });
-                    }
-                }
-            }
-
-            if (intersectionData.length === 0) {
-                drawScaledSegment(pieceCtx, segmentToDraw, 'solid');
-                continue;
-            }
-
-            let closestData = null;
-            let minDistanceSq = Infinity;
-            for (const data of intersectionData) {
-                const distSq = (data.point.x - segmentToDraw.start.x)**2 + (data.point.y - segmentToDraw.start.y)**2;
-                if (distSq < minDistanceSq) {
-                    minDistanceSq = distSq;
-                    closestData = data;
-                }
-            }
             
-            const closestIntersection = closestData.point;
-            const occludingProfile = closestData.occludingProfile;
-            const testPoint1 = { x: (segmentToDraw.start.x + closestIntersection.x) / 2, y: (segmentToDraw.start.y + closestIntersection.y) / 2 };
-            const startHalfIsHidden = isPointInProfile(testPoint1, occludingProfile);
-
-            if (startHalfIsHidden) {
-                drawScaledSegment(pieceCtx, { start: segmentToDraw.start, end: closestIntersection }, 'dashed');
-                drawScaledSegment(pieceCtx, { start: closestIntersection, end: segmentToDraw.end }, 'solid');
-            } else {
-                drawScaledSegment(pieceCtx, { start: segmentToDraw.start, end: closestIntersection }, 'solid');
-                drawScaledSegment(pieceCtx, { start: closestIntersection, end: segmentToDraw.end }, 'dashed');
-            }
+            const segmentForScaling = {
+                start: { x: segmentToDraw.start.x * scale + offsetX, y: segmentToDraw.start.y * scale + offsetY },
+                end: { x: segmentToDraw.end.x * scale + offsetX, y: segmentToDraw.end.y * scale + offsetY }
+            };
+            
+            drawSegmentWithMultipleIntersections(pieceCtx, segmentForScaling, allLaterProfiles.map(p => ({
+                segments: p.segments.map(s => ({
+                    start: { x: s.start.x * scale + offsetX, y: s.start.y * scale + offsetY },
+                    end: { x: s.end.x * scale + offsetX, y: s.end.y * scale + offsetY }
+                }))
+            })));
         }
     }
     
