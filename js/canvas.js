@@ -12,7 +12,6 @@ export function redraw() {
     dom.ctx.lineCap = 'round';
     dom.ctx.lineJoin = 'round';
 
-    // Desenha as guias do mouse se estiver em modo de desenho
     if (state.mousePosition && state.modoDesenhoAtivo) {
         dom.ctx.save();
         dom.ctx.strokeStyle = '#a9a9a9';
@@ -29,17 +28,15 @@ export function redraw() {
         dom.ctx.restore();
     }
 
-    // --- MUDANÇA PRINCIPAL NA LÓGICA DE DESENHO ---
     for (let i = 0; i < state.profiles.length; i++) {
         const profileToDraw = state.profiles[i];
-        const allLaterProfiles = state.profiles.slice(i + 1); // Pega todos os perfis que vêm depois
+        const allLaterProfiles = state.profiles.slice(i + 1);
 
         for (const segmentToDraw of profileToDraw.segments) {
             drawSegmentWithMultipleIntersections(dom.ctx, segmentToDraw, allLaterProfiles);
         }
     }
 
-    // Desenha os textos das medidas por cima de tudo
     state.profiles.forEach(profile => {
         profile.segments.forEach(seg => {
             if (seg.measurement) {
@@ -48,7 +45,6 @@ export function redraw() {
         });
     });
 
-    // Desenha o perfil de pré-visualização
     if (state.isDrawing && state.previewPath) {
         dom.ctx.lineWidth = state.previewPath.lineWidth;
         dom.ctx.strokeStyle = '#007bff';
@@ -65,10 +61,7 @@ export function redraw() {
 
 
 /**
- * NOVA FUNÇÃO: Desenha um segmento, considerando TODAS as interseções possíveis.
- * @param {CanvasRenderingContext2D} ctx - O contexto do canvas.
- * @param {object} segment - O segmento a ser desenhado.
- * @param {Array<object>} occludingProfiles - Array de perfis que podem estar sobrepondo o segmento.
+ * FUNÇÃO ATUALIZADA: Desenha um segmento, considerando interseções parciais E sobreposições completas.
  */
 function drawSegmentWithMultipleIntersections(ctx, segment, occludingProfiles) {
     const intersectionPoints = [];
@@ -85,30 +78,38 @@ function drawSegmentWithMultipleIntersections(ctx, segment, occludingProfiles) {
     ctx.strokeStyle = (segment === state.hoveredSegment || segment === state.hoveredTextSegment) && !state.modoDesenhoAtivo ? '#007bff' : '#000000';
 
     if (intersectionPoints.length === 0) {
+        // --- LÓGICA ADICIONADA PARA SOBREPOSIÇÃO COMPLETA ---
+        // Se não há interseções, verifica se o segmento está totalmente escondido.
+        const midPoint = { x: (segment.start.x + segment.end.x) / 2, y: (segment.start.y + segment.end.y) / 2 };
+        let isCompletelyHidden = false;
+        for (const profile of occludingProfiles) {
+            if (isPointInProfile(midPoint, profile)) {
+                isCompletelyHidden = true;
+                break;
+            }
+        }
+        
         ctx.beginPath();
-        ctx.setLineDash([]);
+        ctx.setLineDash(isCompletelyHidden ? [4, 4] : []); // Traceja se estiver completamente escondido
         ctx.moveTo(segment.start.x, segment.start.y);
         ctx.lineTo(segment.end.x, segment.end.y);
         ctx.stroke();
         return;
     }
 
-    // Cria uma lista de todos os pontos notáveis (início, fim e interseções)
+    // --- LÓGICA EXISTENTE PARA SOBREPOSIÇÃO PARCIAL (sem alterações) ---
     const allPoints = [segment.start, ...intersectionPoints, segment.end];
 
-    // Ordena os pontos pela distância do ponto inicial do segmento
     allPoints.sort((a, b) => {
         const distA = Math.hypot(a.x - segment.start.x, a.y - segment.start.y);
         const distB = Math.hypot(b.x - segment.start.x, b.y - segment.start.y);
         return distA - distB;
     });
     
-    // Desenha cada sub-segmento entre os pontos ordenados
     for (let i = 0; i < allPoints.length - 1; i++) {
         const subStart = allPoints[i];
         const subEnd = allPoints[i+1];
         
-        // Verifica se o meio deste sub-segmento está oculto
         const midPoint = { x: (subStart.x + subEnd.x) / 2, y: (subStart.y + subEnd.y) / 2 };
         let isHidden = false;
         for (const profile of occludingProfiles) {
@@ -126,11 +127,8 @@ function drawSegmentWithMultipleIntersections(ctx, segment, occludingProfiles) {
     }
 }
 
-
-/**
- * Função para desenhar o texto da medida (sem alterações, mas mantida aqui).
- */
 function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
+    // (Esta função permanece a mesma)
     const startX = seg.start.x * scale + offsetX;
     const startY = seg.start.y * scale + offsetY;
     const endX = seg.end.x * scale + offsetX;
@@ -167,10 +165,8 @@ function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
     ctx.restore();
 }
 
-/**
- * Função para desenhar o perfil completo em um canvas de resultado (sem alterações).
- */
 export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
+    // (Esta função permanece a mesma)
     const pieceCtx = targetCanvas.getContext('2d');
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     allProfiles.forEach(p => { p.segments.forEach(seg => {
