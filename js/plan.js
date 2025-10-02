@@ -7,11 +7,12 @@ function optimizeSheetUsage(totalLength) {
     const sheets = [];
     let remainingLength = totalLength;
     while (remainingLength > 0.01) {
-        if (remainingLength >= 3 && (remainingLength - 3 === 0 || remainingLength - 3 >= 2)) { sheets.push(3); remainingLength -= 3; }
-        else if ((remainingLength !== 1) && (remainingLength !== 4) && (remainingLength >= 3) && (remainingLength - 3 === 0 || remainingLength - 3 <= 2)) { sheets.push(3); remainingLength -= 3; }
-        else if (remainingLength >= 2) { sheets.push(2); remainingLength -= 2; }
-        else { sheets.push(parseFloat(remainingLength.toFixed(2))); remainingLength = 0; }
-    }
+            if (remainingLength >= 3 && (remainingLength - 3 === 0 || remainingLength - 3 >= 2)) { sheets.push(3); remainingLength -= 3; } 
+            else if ((remainingLength !== 1) && (remainingLength !== 4) && (remainingLength >= 3) && (remainingLength - 3 === 0 || remainingLength - 3 <= 2)) { sheets.push(3); remainingLength -= 3; } 
+            else  if (remainingLength == 4 ){  sheets.push(2); remainingLength -= 2;}
+            else if (remainingLength >= 2 && remainingLength < 3) { sheets.push(parseFloat(remainingLength.toFixed(3))); remainingLength -= remainingLength; }
+            else { sheets.push(parseFloat(remainingLength.toFixed(2))); remainingLength = 0; }
+        }
     return sheets;
 }
 
