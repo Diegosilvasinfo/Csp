@@ -4,6 +4,7 @@ import * as state from './state.js';
 import { drawCompleteProfileOnCanvas } from './canvas.js';
 
 function optimizeSheetUsage(totalLength) {
+    console.log("1. Função optimizeSheetUsage FOI CHAMADA com o valor:", totalLength);
     // variavel global para fixar a metragem com embolsamento
  var sheetsFixed = 0;
     const sheets = [];
@@ -17,9 +18,11 @@ let fittingQuantity = 0;
 
         if(dom.checkRetreat.checked){
 
+            console.log("2. O checkbox está MARCADO.");
+
             if(remainingLength % 3 == 0){
                 sheetMetal3 += remainingLength/3
-                fittingQuantity += (sheetMetal3)-1
+                fittingQuantity += (sheetMetal3)
                 sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
                 remainingLength += sheetTotal
                 sheetsFixed = remainingLength
@@ -30,7 +33,8 @@ let fittingQuantity = 0;
                     sheetMetal3 -= 1
                     sheetMetal2 += 1
             }
-            fittingQuantity += ((sheetMetal3/3) + (sheetMetal2/2))-1
+            fittingQuantity += ((sheetMetal3/3) + (sheetMetal2/2))
+            console.log(fittingQuantity)
             sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
             remainingLength += sheetTotal
             sheetsFixed = remainingLength
@@ -38,7 +42,7 @@ let fittingQuantity = 0;
           }
         }
         //******************* Fim do cálculo automático do embolçamento ****************//
-        sheetsFixed = remainingLength
+        //sheetsFixed = remainingLength
 
     while (remainingLength > 0.01) {
             if (remainingLength >= 3 && (remainingLength - 3 === 0 || remainingLength - 3 >= 2)) { sheets.push(3); remainingLength -= 3; } 
@@ -80,7 +84,7 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
             }
 
             if(isTapered){
-                //totalLength = sheetsFixed
+                
                 const startWidth = parseFloat(startSeg.measurement.text);
                 const endWidth = parseFloat(endSeg.measurement.text);
                 const totalIncrease = endWidth - startWidth;
@@ -98,9 +102,10 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
                 if (seg.measurement) {
                     const value = parseFloat(seg.measurement.text);
                     if(seg.measurement.type === 'variable_start' || seg.measurement.type === 'variable_end'){
-                        if(idx === 0) somasInicio += value;
+                        console.log(startSeg.measurement.text)
                         if(idx === 2) somasFim += value;
                     } else {
+                        console.log(value)
                        somasInicio += value;
                        somasFim += value;
                     }
