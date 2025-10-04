@@ -19,7 +19,7 @@ let fittingQuantity = 0;
 
             if(remainingLength % 3 == 0){
                 sheetMetal3 += remainingLength/3
-                fittingQuantity += (sheetMetal3/3)-1
+                fittingQuantity += (sheetMetal3)-1
                 sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
                 remainingLength += sheetTotal
                 sheetsFixed = remainingLength
