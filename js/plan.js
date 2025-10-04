@@ -23,6 +23,7 @@ let fittingQuantity = 0;
             if(remainingLength % 3 == 0){
                 sheetMetal3 += remainingLength/3
                 fittingQuantity += (sheetMetal3)
+                alert(fittingQuantity)
                 sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
                 remainingLength += sheetTotal
                 sheetsFixed = remainingLength
@@ -34,6 +35,7 @@ let fittingQuantity = 0;
                     sheetMetal2 += 1
             }
             fittingQuantity += ((sheetMetal3/3) + (sheetMetal2/2))
+            alert(fittingQuantity)
             console.log(fittingQuantity)
             sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
             remainingLength += sheetTotal
