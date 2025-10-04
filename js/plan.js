@@ -4,8 +4,42 @@ import * as state from './state.js';
 import { drawCompleteProfileOnCanvas } from './canvas.js';
 
 function optimizeSheetUsage(totalLength) {
+    // variavel global para fixar a metragem com embolsamento
+ var sheetsFixed = 0;
     const sheets = [];
     let remainingLength = totalLength;
+     let sheetMetal3 = 0;
+let sheetMetal2 = 0;
+ let sheetTotal = 0;
+let fittingQuantity = 0;
+
+ //*********** Lógica do cálculo automático do embolçamento ****************//
+
+        if(dom.checkRetreat.checked){
+
+            if(remainingLength % 3 == 0){
+                sheetMetal3 += remainingLength/3
+                fittingQuantity += (sheetMetal3/3)-1
+                sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
+                remainingLength += sheetTotal
+                sheetsFixed = remainingLength
+                
+            }else{
+                sheetMetal3 += remainingLength
+                while(sheetMetal3 %3 != 0 || sheetMetal2 % 2 !=0){
+                    sheetMetal3 -= 1
+                    sheetMetal2 += 1
+            }
+            fittingQuantity += ((sheetMetal3/3) + (sheetMetal2/2))-1
+            sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
+            remainingLength += sheetTotal
+            sheetsFixed = remainingLength
+
+          }
+        }
+        //******************* Fim do cálculo automático do embolçamento ****************//
+        sheetsFixed = remainingLength
+
     while (remainingLength > 0.01) {
             if (remainingLength >= 3 && (remainingLength - 3 === 0 || remainingLength - 3 >= 2)) { sheets.push(3); remainingLength -= 3; } 
             else if ((remainingLength !== 1) && (remainingLength !== 4) && (remainingLength >= 3) && (remainingLength - 3 === 0 || remainingLength - 3 <= 2)) { sheets.push(3); remainingLength -= 3; } 
@@ -13,7 +47,9 @@ function optimizeSheetUsage(totalLength) {
             else if (remainingLength >= 2 && remainingLength < 3) { sheets.push(parseFloat(remainingLength.toFixed(3))); remainingLength -= remainingLength; }
             else { sheets.push(parseFloat(remainingLength.toFixed(2))); remainingLength = 0; }
         }
-    return sheets;
+// No final de optimizeSheetUsage
+    return { sheetSequence: sheets, finalLength: sheetsFixed };
+
 }
 
 function displayResultsAsDrawings(sheetSequence, totalLength) {
@@ -44,6 +80,7 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
             }
 
             if(isTapered){
+                //totalLength = sheetsFixed
                 const startWidth = parseFloat(startSeg.measurement.text);
                 const endWidth = parseFloat(endSeg.measurement.text);
                 const totalIncrease = endWidth - startWidth;
@@ -94,8 +131,8 @@ export function handleCalculatePlan() {
         alert("ERRO: Por favor, insira um 'Comprimento Total' válido.");
         return;
     }
-    const sheetSequence = optimizeSheetUsage(totalLength);
-    displayResultsAsDrawings(sheetSequence, totalLength);
+    const result = optimizeSheetUsage(totalLength);
+    displayResultsAsDrawings(result.sheetSequence, result.finalLength);
 }
 
 export function printPlan() {

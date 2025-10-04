@@ -19,3 +19,4 @@ export const printButton = document.getElementById('printButton');
 export const undoButton = document.getElementById('undoButton');
 export const embolsamento = document.getElementById('recuo-input');
 export const btnSelected = document.getElementById('selected');
+export const checkRetreat = document.getElementById('checkRetreat');

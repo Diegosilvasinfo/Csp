@@ -12,6 +12,7 @@ export let hoveredSegment = null;
 export let isDraggingText = false;
 export let draggedSegment = null;
 export let hoveredTextSegment = null;
+
 // ADICIONE ESTAS DUAS LINHAS ABAIXO
 export let mousePosition = null; // Inicia como nulo
 export function setMousePosition(pos) { mousePosition = pos; }
