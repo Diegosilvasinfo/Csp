@@ -27,6 +27,7 @@ function drawWatermark(ctx) {
 function drawPrintWatermark(ctx) {
     ctx.save();
     ctx.font = 'bold 50px Arial';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const centerX = ctx.canvas.width / 2;
