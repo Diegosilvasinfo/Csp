@@ -5,10 +5,44 @@ import * as state from './state.js';
 import { getIntersection, isPointInProfile } from './utils.js';
 
 /**
+ * Função para desenhar a marca d'água de fundo (diagonal)
+ */
+function drawWatermark(ctx) {
+    ctx.save();
+    ctx.font = 'bold 70px Arial'; // --- Aumentado de 50px para 70px
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const centerX = ctx.canvas.width / 2;
+    const centerY = ctx.canvas.height / 2;
+    ctx.translate(centerX, centerY);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText('Calhas São Pedro', 0, 0);
+    ctx.restore();
+}
+
+/**
+ * Função para desenhar a marca d'água de impressão (horizontal)
+ */
+function drawPrintWatermark(ctx) {
+    ctx.save();
+    ctx.font = 'bold 50px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const centerX = ctx.canvas.width / 2;
+    const centerY = ctx.canvas.height / 2;
+    // Não rotaciona para manter na horizontal
+    ctx.fillText('Calhas São Pedro', centerX, centerY);
+    ctx.restore();
+}
+
+
+/**
  * Função de desenho principal que chama a nova lógica de renderização.
  */
 export function redraw() {
     dom.ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
+    drawWatermark(dom.ctx); // Adiciona a marca d'água
     dom.ctx.lineCap = 'round';
     dom.ctx.lineJoin = 'round';
 
@@ -216,6 +250,7 @@ export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles, displayOp
     const offsetY = (targetCanvas.height - drawingHeight * scale) / 2 - minY * scale;
 
     pieceCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+    drawPrintWatermark(pieceCtx); // --- Usa a nova função de marca d'água horizontal
     
     for (let i = 0; i < allProfiles.length; i++) {
         const profileToDraw = allProfiles[i];

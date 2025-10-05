@@ -61,7 +61,27 @@ export function checkAndAddMeasurement() {
 }
 
 export function printCanvas() {
-    const dataUrl = dom.canvas.toDataURL('image/png');
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = dom.canvas.width;
+    tempCanvas.height = dom.canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // Desenha o conteúdo do canvas original
+    tempCtx.drawImage(dom.canvas, 0, 0);
+
+    // Adiciona a marca d'água horizontal
+    tempCtx.save();
+    tempCtx.font = 'bold 50px Arial';
+    tempCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    tempCtx.textAlign = 'center';
+    tempCtx.textBaseline = 'middle';
+    const centerX = tempCanvas.width / 2;
+    const centerY = tempCanvas.height / 2;
+    // Sem rotação para manter na horizontal
+    tempCtx.fillText('Calhas São Pedro', centerX, centerY);
+    tempCtx.restore();
+
+    const dataUrl = tempCanvas.toDataURL('image/png');
     const printWindow = window.open('', '_blank');
     if(!printWindow){ alert('Por favor, desative seu bloqueador de pop-ups.'); return; }
     printWindow.document.write('<html><head><title>Imprimir Desenho</title><style>@page { size: auto; margin: 0; } body { margin: 0; text-align: center; } img { max-width: 100%; max-height: 98vh; object-fit: contain; }</style></head><body>');
