@@ -5,7 +5,7 @@ import { drawCompleteProfileOnCanvas } from './canvas.js';
 
 function optimizeSheetUsage(totalLength) {
     console.log("1. Função optimizeSheetUsage FOI CHAMADA com o valor:", totalLength);
-    // variavel global para fixar a metragem com embolsamento
+    // variavel global para fixar a metragem com embolçamento
  var sheetsFixed = 0;
     const sheets = [];
     let remainingLength = totalLength;
@@ -28,7 +28,8 @@ let fittingQuantity = 0;
                 sheetsFixed = remainingLength
                 
             }else{
-                sheetMetal3 += remainingLength
+                // Linha corrigida
+                sheetMetal3 += Math.floor(remainingLength)
                 while(sheetMetal3 %3 != 0 || sheetMetal2 % 2 !=0){
                     sheetMetal3 -= 1
                     sheetMetal2 += 1
@@ -74,6 +75,9 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
         let somasInicio = 0;
         let somasFim = 0;
         
+        const medidasInicio = [];
+        const medidasFim = [];
+
         profileForThisPiece.forEach(p => {
             const startSeg = p.segments[0];
             const endSeg = p.segments[2];
@@ -84,7 +88,6 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
             }
 
             if(isTapered){
-                
                 const startWidth = parseFloat(startSeg.measurement.text);
                 const endWidth = parseFloat(endSeg.measurement.text);
                 const totalIncrease = endWidth - startWidth;
@@ -98,17 +101,19 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
                 endSeg.measurement.text = (startWidth + endIncrease).toFixed(1);
             }
             
-            p.segments.forEach((seg, idx) => {
+            p.segments.forEach(seg => {
                 if (seg.measurement) {
-                    const value = parseFloat(seg.measurement.text);
-                    if(seg.measurement.type === 'variable_start' || seg.measurement.type === 'variable_end'){
-                        console.log(startSeg.measurement.text)
-                        if(idx === 0) somasInicio += value;
-                        if(idx === 2) somasFim += value;
-                    } else {
-                        console.log(value)
-                       somasInicio += value;
-                       somasFim += value;
+                    if (seg.measurement.type === 'variable_start') {
+                        medidasInicio.push(seg.measurement.text);
+                        somasInicio += parseFloat(seg.measurement.text);
+                    } else if (seg.measurement.type === 'variable_end') {
+                        medidasFim.push(seg.measurement.text);
+                        somasFim += parseFloat(seg.measurement.text);
+                    } else if (seg.measurement.type === 'static') {
+                        medidasInicio.push(seg.measurement.text);
+                        medidasFim.push(seg.measurement.text);
+                        somasInicio += parseFloat(seg.measurement.text);
+                        somasFim += parseFloat(seg.measurement.text);
                     }
                 }
             });
@@ -125,11 +130,12 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
         container.appendChild(canvas_piece);
         dom.resultsOutput.appendChild(container);
         
-        drawCompleteProfileOnCanvas(canvas_piece, profileForThisPiece);
+        drawCompleteProfileOnCanvas(canvas_piece, profileForThisPiece, { medidasInicio, medidasFim });
         accumulatedLength += sheetLength;
     });
     dom.resultsModal.classList.remove('hidden');
 }
+
 
 export function handleCalculatePlan() {
     const totalLength = parseFloat(dom.totalLengthInput.value);
@@ -138,7 +144,7 @@ export function handleCalculatePlan() {
         return;
     }
     const result = optimizeSheetUsage(totalLength);
-    displayResultsAsDrawings(result.sheetSequence, result.finalLength);
+    displayResultsAsDrawings(result.sheetSequence, result.finalLength > 0 ? result.finalLength : totalLength);
 }
 
 export function printPlan() {

@@ -128,7 +128,6 @@ function drawSegmentWithMultipleIntersections(ctx, segment, occludingProfiles) {
 }
 
 function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
-    // (Esta função permanece a mesma)
     const startX = seg.start.x * scale + offsetX;
     const startY = seg.start.y * scale + offsetY;
     const endX = seg.end.x * scale + offsetX;
@@ -161,12 +160,42 @@ function drawMeasurementText(ctx, seg, scale = 1, offsetX = 0, offsetY = 0) {
         }
     }
     
-    ctx.fillText(text, seg.measurement.offsetX, seg.measurement.offsetY);
+    ctx.fillText(text, seg.measurement.offsetX * scale, seg.measurement.offsetY * scale);
     ctx.restore();
 }
 
-export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
-    // (Esta função permanece a mesma)
+function drawStartEndMarkers(ctx, targetCanvas, padding, displayOptions) {
+    ctx.fillStyle = '#d93025';
+    ctx.font = 'bold 16px Arial';
+    ctx.textBaseline = 'middle';
+
+    // --- Marcador de Início (Canto Inferior Direito) ---
+    // ** ALTERAÇÃO AQUI **
+    const startText = `Início: ${displayOptions.medidasInicio.join(', ')}`;
+    ctx.textAlign = 'right';
+    const startX = targetCanvas.width - padding; 
+    const startY = targetCanvas.height - padding;
+    
+    ctx.fillText(startText, startX, startY);
+    ctx.beginPath();
+    ctx.arc(startX + 10, startY, 5, 0, 2 * Math.PI); 
+    ctx.fill();
+
+    // --- Marcador de Fim (Canto Superior Esquerdo) ---
+    // ** ALTERAÇÃO AQUI **
+    const endText = `Fim: ${displayOptions.medidasFim.join(', ')}`;
+    ctx.textAlign = 'left';
+    const endX = padding;
+    const endY = padding;
+
+    ctx.fillText(endText, endX, endY);
+    ctx.beginPath();
+    ctx.arc(endX - 10, endY, 5, 0, 2 * Math.PI); 
+    ctx.fill();
+}
+
+
+export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles, displayOptions = null) {
     const pieceCtx = targetCanvas.getContext('2d');
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     allProfiles.forEach(p => { p.segments.forEach(seg => {
@@ -178,7 +207,7 @@ export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
 
     const drawingWidth = maxX - minX;
     const drawingHeight = maxY - minY;
-    const padding = 50;
+    const padding = 50; 
     targetCanvas.width = 750;
     targetCanvas.height = 400;
 
@@ -217,4 +246,8 @@ export function drawCompleteProfileOnCanvas(targetCanvas, allProfiles) {
             }
         });
     });
+
+    if (displayOptions && displayOptions.medidasInicio && displayOptions.medidasFim) {
+        drawStartEndMarkers(pieceCtx, targetCanvas, padding, displayOptions);
+    }
 }
