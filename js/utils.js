@@ -72,7 +72,7 @@ export function printCanvas() {
     // Adiciona a marca d'água horizontal
     tempCtx.save();
     tempCtx.font = 'bold 50px Arial';
-    tempCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    tempCtx.fillStyle = 'rgba(0, 0, 0, 0.03)';
     tempCtx.textAlign = 'center';
     tempCtx.textBaseline = 'middle';
     const centerX = tempCanvas.width / 2;
