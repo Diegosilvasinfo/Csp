@@ -40,6 +40,22 @@ button.active img { filter: invert(1); }
 button:hover { background-color: #4f5356; }
 button img { width: 24px; height: 24px; transition: filter 0.2s ease; }
 input[type="number"] { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #4f5356; border-radius: 4px; background-color: #2a2c33; color: #e8eaed; box-sizing: border-box; }
+
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.checkbox-container input {
+    margin-right: 5px; /* Adiciona um espaço entre o checkbox e o texto */
+    width: auto; /* Remove a largura de 100% que é aplicada aos outros inputs */
+    margin-bottom: 0;
+}
+
+.checkbox-container label {
+    margin-bottom: 0; /* Remove a margem que é aplicada aos outros labels */
+}
 /* ... (outros estilos de input range) ... */
 
 /* --- ESTILOS DA JANELA DE RESULTADOS (MODAL) --- */
