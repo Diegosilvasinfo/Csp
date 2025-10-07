@@ -33,16 +33,14 @@ function getInitialProfileWidths() {
 function optimizeSheetUsage(totalLength, somaDosPerfis, larguraChapaCm) {
     console.log("1. Função optimizeSheetUsage FOI CHAMADA com o valor:", totalLength);
     console.log("Soma dos Perfis (Largura Máxima Dinâmica):", somaDosPerfis);
-    console.log("Largura da Chapa a ser usada:", larguraChapaCm);
+    console.log("Largura da Chapa a ser usada (para corte virado):", larguraChapaCm);
 
-    let sheetsFixed = 0;
     const sheets = [];
-    let remainingLength = totalLength;
+    const LARGURA_MAX_CORTE_NORMAL = 120; // Limite físico para corte padrão.
 
-    // Lógica de cálculo de embolçamento
+    // Função interna para o cálculo de embolçamento, preservada como no original.
     const calcularEmbolsamento = (length) => {
         if (dom.checkRetreat.checked) {
-            console.log("2. O checkbox de recuo está MARCADO.");
             let sheetMetal3 = 0, sheetMetal2 = 0, fittingQuantity = 0;
             if (length % 3 === 0) {
                 sheetMetal3 = length / 3;
@@ -64,8 +62,9 @@ function optimizeSheetUsage(totalLength, somaDosPerfis, larguraChapaCm) {
         return length;
     };
 
-    // Função para o corte de chapas padrão (até 3m)
+    // Função interna para o corte de chapas padrão (até 3m)
     const corteNormal = (length) => {
+        console.log(`Processando ${length.toFixed(2)}m com corte NORMAL.`);
         let currentLength = length;
         while (currentLength > 0.01) {
             if (currentLength >= 3 && (currentLength - 3 === 0 || currentLength - 3 >= 2)) {
@@ -82,62 +81,84 @@ function optimizeSheetUsage(totalLength, somaDosPerfis, larguraChapaCm) {
         }
     };
 
-    const { somasInicio, somasFim } = getInitialProfileWidths();
-
-    // Se a largura máxima do perfil cabe na chapa, usa o corte normal para TUDO.
-    if (somaDosPerfis <= larguraChapaCm) {
-        console.log('Executando lógica de corte NORMAL para todo o comprimento.');
-        remainingLength = calcularEmbolsamento(totalLength);
-        sheetsFixed = remainingLength;
-        corteNormal(remainingLength);
-    } else {
-        // Lógica HÍBRIDA: A largura final excede a da chapa.
-        console.log('Executando lógica de corte HÍBRIDA.');
-        let tamanhoFeitoComCorteNormal = 0;
-
-        // Verifica se a peça começa mais estreita que a chapa.
-        if (somasInicio < larguraChapaCm && somasFim > somasInicio) {
-            const aumentoTotal = somasFim - somasInicio;
-            const taxaAumentoPorMetro = aumentoTotal / totalLength;
-            
-            if (taxaAumentoPorMetro > 0) {
-                // Calcula em que comprimento a largura atinge o limite da chapa
-                tamanhoFeitoComCorteNormal = (larguraChapaCm - somasInicio) / taxaAumentoPorMetro;
-            }
-        }
-
-        // Se uma parte pode ser feita com corte normal...
-        if (tamanhoFeitoComCorteNormal > 0 && tamanhoFeitoComCorteNormal < totalLength) {
-            console.log(`Corte normal para os primeiros ${tamanhoFeitoComCorteNormal.toFixed(2)}m`);
-            let initialLength = calcularEmbolsamento(tamanhoFeitoComCorteNormal);
-            corteNormal(initialLength);
-            remainingLength = totalLength - tamanhoFeitoComCorteNormal;
-        } else {
-            // Se a peça já começa mais larga, todo o corte é com chapa virada.
-            remainingLength = totalLength;
-        }
-        
-        // Aplica o corte de chapa virada para o restante do comprimento
-        console.log(`Iniciando corte com CHAPA VIRADA para os ${remainingLength.toFixed(2)}m restantes.`);
+    // Função interna para o corte de chapas viradas
+    const corteVirado = (length) => {
+        console.log(`Iniciando corte com CHAPA VIRADA para ${length.toFixed(2)}m.`);
         const larguraChapaVirada = larguraChapaCm / 100; // ex: 1.215m
         const tamanhoDoRecuo = parseFloat(dom.embolsamento.value) / 100 || 0;
         
-        while (remainingLength > 0.01) {
-            if (remainingLength >= larguraChapaVirada) {
+        let currentLength = length;
+        while (currentLength > 0.01) {
+            if (currentLength >= larguraChapaVirada) {
                 sheets.push(larguraChapaVirada);
-                remainingLength -= larguraChapaVirada;
-                if (dom.checkRetreat.checked && remainingLength > 0.01) {
-                    remainingLength += tamanhoDoRecuo;
+                currentLength -= larguraChapaVirada;
+                if (dom.checkRetreat.checked && currentLength > 0.01) {
+                    currentLength += tamanhoDoRecuo;
                 }
             } else {
-                sheets.push(parseFloat(remainingLength.toFixed(2)));
-                remainingLength = 0;
+                sheets.push(parseFloat(currentLength.toFixed(2)));
+                currentLength = 0;
             }
         }
-        sheetsFixed = sheets.reduce((a, b) => a + b, 0);
+    };
+
+    const { somasInicio, somasFim } = getInitialProfileWidths();
+
+    // --- LÓGICA DE DECISÃO CORRIGIDA ---
+
+    // CENÁRIO 1: A largura MÁXIMA do perfil cabe no corte normal.
+    if (somaDosPerfis <= LARGURA_MAX_CORTE_NORMAL) {
+        console.log('Executando lógica de corte NORMAL para todo o comprimento.');
+        const lengthWithRetreat = calcularEmbolsamento(totalLength);
+        corteNormal(lengthWithRetreat);
+    } 
+    // CENÁRIO 2: A largura do perfil EXcede o limite em algum ponto.
+    else {
+        console.log('Executando lógica de corte HÍBRIDA/VIRADA.');
+        const taxaAumentoPorMetro = totalLength > 0 ? (somasFim - somasInicio) / totalLength : 0;
+
+        // Caso a largura seja constante, mas acima do limite.
+        if (Math.abs(taxaAumentoPorMetro) < 0.001) {
+             console.log('Largura constante, acima do limite. Toda a peça com corte virado.');
+             corteVirado(totalLength);
+        } else {
+            // Calcula em que ponto do comprimento (em metros) a largura cruza o limite de 120cm.
+            const crossOverLength = (LARGURA_MAX_CORTE_NORMAL - somasInicio) / taxaAumentoPorMetro;
+
+            // Se o ponto de cruzamento está fora do comprimento da peça,
+            // significa que a peça inteira está acima do limite.
+            if (crossOverLength <= 0 || crossOverLength >= totalLength) {
+                console.log('Largura sempre acima do limite. Toda a peça com corte virado.');
+                corteVirado(totalLength);
+            }
+            // Se o cruzamento ocorre dentro da peça, temos um caso HÍBRIDO.
+            else {
+                // Caso A: Começa estreito e fica largo.
+                if (somasInicio < LARGURA_MAX_CORTE_NORMAL) {
+                    console.log(`HÍBRIDO: Começa ESTREITO e fica LARGO. Ponto de virada em ${crossOverLength.toFixed(2)}m.`);
+                    const normalPartLength = crossOverLength;
+                    const turnedPartLength = totalLength - crossOverLength;
+                    
+                    const normalLengthWithRetreat = calcularEmbolsamento(normalPartLength);
+                    corteNormal(normalLengthWithRetreat);
+                    corteVirado(turnedPartLength);
+                }
+                // Caso B (O SEU BUG): Começa largo e fica estreito.
+                else {
+                    console.log(`HÍBRIDO: Começa LARGO e fica ESTREITO. Ponto de virada em ${crossOverLength.toFixed(2)}m.`);
+                    const turnedPartLength = crossOverLength;
+                    const normalPartLength = totalLength - crossOverLength;
+
+                    corteVirado(turnedPartLength);
+                    const normalLengthWithRetreat = calcularEmbolsamento(normalPartLength);
+                    corteNormal(normalLengthWithRetreat);
+                }
+            }
+        }
     }
 
-    return { sheetSequence: sheets, finalLength: sheetsFixed };
+    const finalLength = sheets.reduce((a, b) => a + b, 0);
+    return { sheetSequence: sheets, finalLength: finalLength };
 }
 
 
