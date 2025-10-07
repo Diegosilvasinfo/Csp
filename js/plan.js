@@ -3,59 +3,147 @@ import * as dom from './dom.js';
 import * as state from './state.js';
 import { drawCompleteProfileOnCanvas } from './canvas.js';
 
-function optimizeSheetUsage(totalLength) {
+/**
+ * Calcula a largura inicial e final total com base nos perfis desenhados.
+ * @returns {{somasInicio: number, somasFim: number}}
+ */
+function getInitialProfileWidths() {
+    let somasInicio = 0;
+    let somasFim = 0;
+    state.profiles.forEach(p => {
+        p.segments.forEach(seg => {
+            if (seg.measurement) {
+                const value = parseFloat(seg.measurement.text);
+                if (!isNaN(value)) {
+                    if (seg.measurement.type === 'variable_start') {
+                        somasInicio += value;
+                    } else if (seg.measurement.type === 'variable_end') {
+                        somasFim += value;
+                    } else if (seg.measurement.type === 'static') {
+                        somasInicio += value;
+                        somasFim += value;
+                    }
+                }
+            }
+        });
+    });
+    return { somasInicio, somasFim };
+}
+
+function optimizeSheetUsage(totalLength, somaDosPerfis) {
     console.log("1. Função optimizeSheetUsage FOI CHAMADA com o valor:", totalLength);
-    // variavel global para fixar a metragem com embolçamento
- var sheetsFixed = 0;
+    console.log("Soma dos Perfis (Largura Máxima Dinâmica):", somaDosPerfis);
+    
+    let sheetsFixed = 0;
     const sheets = [];
     let remainingLength = totalLength;
-     let sheetMetal3 = 0;
-let sheetMetal2 = 0;
- let sheetTotal = 0;
-let fittingQuantity = 0;
 
- //*********** Lógica do cálculo automático do embolçamento ****************//
+    // Lógica de cálculo de embolçamento (movida para ser reutilizável)
+    const calcularEmbolsamento = (length) => {
+        if (dom.checkRetreat.checked) {
+            console.log("2. O checkbox de recuo está MARCADO.");
+            let sheetMetal3 = 0;
+            let sheetMetal2 = 0;
+            let fittingQuantity = 0;
 
-        if(dom.checkRetreat.checked){
-
-            console.log("2. O checkbox está MARCADO.");
-
-            if(remainingLength % 3 == 0){
-                sheetMetal3 += remainingLength/3
-                fittingQuantity += (sheetMetal3)
-                sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
-                remainingLength += sheetTotal
-                sheetsFixed = remainingLength
-                
-            }else{
-                // Linha corrigida
-                sheetMetal3 += Math.floor(remainingLength)
-                while(sheetMetal3 %3 != 0 || sheetMetal2 % 2 !=0){
-                    sheetMetal3 -= 1
-                    sheetMetal2 += 1
+            if (length % 3 === 0) {
+                sheetMetal3 = length / 3;
+                fittingQuantity = sheetMetal3;
+            } else {
+                sheetMetal3 = Math.floor(length);
+                while (sheetMetal3 > 0 && sheetMetal3 % 3 !== 0) {
+                    sheetMetal3 -= 1;
+                    sheetMetal2 += 1;
+                }
+                 if (sheetMetal3 === 0) { // Caso o comprimento seja menor que 3
+                    sheetMetal2 = Math.ceil(length / 2) * 2; // Ajusta para a lógica de pares
+                 }
+                fittingQuantity = (sheetMetal3 / 3) + (sheetMetal2 / 2);
             }
-            fittingQuantity += ((sheetMetal3/3) + (sheetMetal2/2))
-            console.log(fittingQuantity)
-            sheetTotal = (fittingQuantity * dom.embolsamento.value)/100
-            remainingLength += sheetTotal
-            sheetsFixed = remainingLength
-
-          }
+            const sheetTotal = (fittingQuantity * dom.embolsamento.value) / 100;
+            return length + sheetTotal;
         }
-        //******************* Fim do cálculo automático do embolçamento ****************//
-        //sheetsFixed = remainingLength
+        return length;
+    };
 
-    while (remainingLength > 0.01) {
-            if (remainingLength >= 3 && (remainingLength - 3 === 0 || remainingLength - 3 >= 2)) { sheets.push(3); remainingLength -= 3; } 
-            else if ((remainingLength !== 1) && (remainingLength !== 4) && (remainingLength >= 3) && (remainingLength - 3 === 0 || remainingLength - 3 <= 2)) { sheets.push(3); remainingLength -= 3; } 
-            else  if (remainingLength == 4 ){  sheets.push(2); remainingLength -= 2;}
-            else if (remainingLength >= 2 && remainingLength < 3) { sheets.push(parseFloat(remainingLength.toFixed(3))); remainingLength -= remainingLength; }
-            else { sheets.push(parseFloat(remainingLength.toFixed(2))); remainingLength = 0; }
+    // Função para o corte de chapas padrão (até 3m)
+    const corteNormal = (length) => {
+        let currentLength = length;
+        while (currentLength > 0.01) {
+            if (currentLength >= 3 && (currentLength - 3 === 0 || currentLength - 3 >= 2)) {
+                sheets.push(3);
+                currentLength -= 3;
+            } else if ((currentLength !== 1) && (currentLength !== 4) && (currentLength >= 3) && (currentLength - 3 <= 2)) {
+                sheets.push(3);
+                currentLength -= 3;
+            } else if (currentLength === 4) {
+                sheets.push(2);
+                currentLength -= 2;
+            } else if (currentLength >= 2 && currentLength < 3) {
+                sheets.push(parseFloat(currentLength.toFixed(3)));
+                currentLength = 0;
+            } else {
+                sheets.push(parseFloat(currentLength.toFixed(2)));
+                currentLength = 0;
+            }
         }
-// No final de optimizeSheetUsage
+    };
+
+    // Verifica a largura do perfil para decidir a lógica de corte
+    if (somaDosPerfis <= 120) {
+        console.log('Executando lógica de corte NORMAL.');
+        remainingLength = calcularEmbolsamento(totalLength);
+        sheetsFixed = remainingLength;
+        corteNormal(remainingLength);
+    } else {
+        console.log('Executando lógica de corte para LARGURA > 120cm.');
+        const larguraChapa = 1.20; // Em metros
+        const tamanhoDoRecuo = parseFloat(dom.embolsamento.value) / 100 || 0; // Em metros
+        const caimentoPorMetro = 0.01; // 1cm por metro, ajuste se necessário
+        let larguraAtual = somaDosPerfis / 100; // Converter para metros
+        
+        // Esta lógica assume que o caimento começa a partir da 'somaDosPerfis'.
+        // Se a largura inicial já for maior que 120, todo o corte será com chapa "virada"
+        let tamanhoFeito = 0;
+
+        // Se a largura inicial for menor que 120, calcula até onde pode ir
+        const { somasInicio, somasFim } = getInitialProfileWidths();
+        if(somasInicio < 120){
+             const aumentoTotal = (somasFim - somasInicio) / 100; // Aumento em metros
+             const taxaAumentoPorMetro = aumentoTotal / totalLength;
+             if (taxaAumentoPorMetro > 0) {
+                tamanhoFeito = ((1.20 - (somasInicio/100)) / taxaAumentoPorMetro);
+             }
+        }
+
+        if (tamanhoFeito > 0 && tamanhoFeito < totalLength) {
+             console.log(`Corte normal para os primeiros ${tamanhoFeito.toFixed(2)}m`);
+             let initialLength = calcularEmbolsamento(tamanhoFeito);
+             corteNormal(initialLength);
+             remainingLength = totalLength - tamanhoFeito;
+        } else {
+            remainingLength = totalLength;
+        }
+
+        console.log(`Restante para cortar em chapas de 1.20m: ${remainingLength.toFixed(2)}m`);
+        while (remainingLength > 0.01) {
+            if (remainingLength >= larguraChapa) {
+                sheets.push(larguraChapa);
+                remainingLength -= larguraChapa;
+                if (dom.checkRetreat.checked && remainingLength > 0.01) {
+                    remainingLength += tamanhoDoRecuo;
+                }
+            } else {
+                sheets.push(parseFloat(remainingLength.toFixed(2)));
+                remainingLength = 0;
+            }
+        }
+        sheetsFixed = sheets.reduce((a, b) => a + b, 0);
+    }
+
     return { sheetSequence: sheets, finalLength: sheetsFixed };
-
 }
+
 
 function displayResultsAsDrawings(sheetSequence, totalLength) {
     dom.resultsOutput.innerHTML = '';
@@ -72,8 +160,8 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
         title.textContent = `PEÇA ${i + 1} (Chapa de ${sheetLength}m) | Posição: ${accumulatedLength.toFixed(1)}m à ${(accumulatedLength + sheetLength).toFixed(1)}m`;
         
         const profileForThisPiece = JSON.parse(JSON.stringify(state.profiles));
-        let somasInicio = 0;
-        let somasFim = 0;
+        let somasInicioPeca = 0;
+        let somasFimPeca = 0;
         
         const medidasInicio = [];
         const medidasFim = [];
@@ -103,17 +191,18 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
             
             p.segments.forEach(seg => {
                 if (seg.measurement) {
+                    const value = parseFloat(seg.measurement.text);
                     if (seg.measurement.type === 'variable_start') {
-                        medidasInicio.push(seg.measurement.text);
-                        somasInicio += parseFloat(seg.measurement.text);
+                        medidasInicio.push(value.toFixed(1));
+                        somasInicioPeca += value;
                     } else if (seg.measurement.type === 'variable_end') {
-                        medidasFim.push(seg.measurement.text);
-                        somasFim += parseFloat(seg.measurement.text);
+                        medidasFim.push(value.toFixed(1));
+                        somasFimPeca += value;
                     } else if (seg.measurement.type === 'static') {
-                        medidasInicio.push(seg.measurement.text);
-                        medidasFim.push(seg.measurement.text);
-                        somasInicio += parseFloat(seg.measurement.text);
-                        somasFim += parseFloat(seg.measurement.text);
+                         medidasInicio.push(value.toFixed(1));
+                         medidasFim.push(value.toFixed(1));
+                         somasInicioPeca += value;
+                         somasFimPeca += value;
                     }
                 }
             });
@@ -121,7 +210,7 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
         
         const totalWidthText = document.createElement('p');
         totalWidthText.style.fontWeight = 'bold';
-        totalWidthText.innerHTML = `Largura Total (Desdobrada): <span style="color:#d93025">${somasInicio.toFixed(1)}cm</span> (início) -> <span style="color:#d93025">${somasFim.toFixed(1)}cm</span> (fim)`;
+        totalWidthText.innerHTML = `Largura Total (Desdobrada): <span style="color:#d93025">${somasInicioPeca.toFixed(1)}cm</span> (início) -> <span style="color:#d93025">${somasFimPeca.toFixed(1)}cm</span> (fim)`;
         container.appendChild(title);
         container.appendChild(totalWidthText);
 
@@ -136,14 +225,25 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
     dom.resultsModal.classList.remove('hidden');
 }
 
-
 export function handleCalculatePlan() {
     const totalLength = parseFloat(dom.totalLengthInput.value);
     if (isNaN(totalLength) || totalLength <= 0) {
         alert("ERRO: Por favor, insira um 'Comprimento Total' válido.");
         return;
     }
-    const result = optimizeSheetUsage(totalLength);
+
+    if (state.profiles.length === 0) {
+        alert("ERRO: Por favor, desenhe um perfil antes de calcular.");
+        return;
+    }
+
+    // Calcula as larguras dinamicamente a partir do desenho
+    const { somasInicio, somasFim } = getInitialProfileWidths();
+    const somaDosPerfis = Math.max(somasInicio, somasFim);
+
+    // Passa o valor dinâmico para a função de otimização
+    const result = optimizeSheetUsage(totalLength, somaDosPerfis);
+    
     displayResultsAsDrawings(result.sheetSequence, result.finalLength > 0 ? result.finalLength : totalLength);
 }
 
