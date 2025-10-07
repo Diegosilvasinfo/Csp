@@ -30,22 +30,20 @@ function getInitialProfileWidths() {
     return { somasInicio, somasFim };
 }
 
-function optimizeSheetUsage(totalLength, somaDosPerfis) {
+function optimizeSheetUsage(totalLength, somaDosPerfis, larguraChapaCm) {
     console.log("1. Função optimizeSheetUsage FOI CHAMADA com o valor:", totalLength);
     console.log("Soma dos Perfis (Largura Máxima Dinâmica):", somaDosPerfis);
-    
+    console.log("Largura da Chapa a ser usada:", larguraChapaCm);
+
     let sheetsFixed = 0;
     const sheets = [];
     let remainingLength = totalLength;
 
-    // Lógica de cálculo de embolçamento (movida para ser reutilizável)
+    // Lógica de cálculo de embolçamento
     const calcularEmbolsamento = (length) => {
         if (dom.checkRetreat.checked) {
             console.log("2. O checkbox de recuo está MARCADO.");
-            let sheetMetal3 = 0;
-            let sheetMetal2 = 0;
-            let fittingQuantity = 0;
-
+            let sheetMetal3 = 0, sheetMetal2 = 0, fittingQuantity = 0;
             if (length % 3 === 0) {
                 sheetMetal3 = length / 3;
                 fittingQuantity = sheetMetal3;
@@ -53,10 +51,10 @@ function optimizeSheetUsage(totalLength, somaDosPerfis) {
                 sheetMetal3 = Math.floor(length);
                 while (sheetMetal3 > 0 && sheetMetal3 % 3 !== 0) {
                     sheetMetal3 -= 1;
-                    sheetMetal2 += 1;
+                    sheetMetal2 += 1.5;
                 }
-                 if (sheetMetal3 === 0) { // Caso o comprimento seja menor que 3
-                    sheetMetal2 = Math.ceil(length / 2) * 2; // Ajusta para a lógica de pares
+                 if (sheetMetal3 === 0) {
+                    sheetMetal2 = Math.ceil(length / 2) * 2;
                  }
                 fittingQuantity = (sheetMetal3 / 3) + (sheetMetal2 / 2);
             }
@@ -71,65 +69,63 @@ function optimizeSheetUsage(totalLength, somaDosPerfis) {
         let currentLength = length;
         while (currentLength > 0.01) {
             if (currentLength >= 3 && (currentLength - 3 === 0 || currentLength - 3 >= 2)) {
-                sheets.push(3);
-                currentLength -= 3;
+                sheets.push(3); currentLength -= 3;
             } else if ((currentLength !== 1) && (currentLength !== 4) && (currentLength >= 3) && (currentLength - 3 <= 2)) {
-                sheets.push(3);
-                currentLength -= 3;
+                sheets.push(3); currentLength -= 3;
             } else if (currentLength === 4) {
-                sheets.push(2);
-                currentLength -= 2;
+                sheets.push(2); currentLength -= 2;
             } else if (currentLength >= 2 && currentLength < 3) {
-                sheets.push(parseFloat(currentLength.toFixed(3)));
-                currentLength = 0;
+                sheets.push(parseFloat(currentLength.toFixed(3))); currentLength = 0;
             } else {
-                sheets.push(parseFloat(currentLength.toFixed(2)));
-                currentLength = 0;
+                sheets.push(parseFloat(currentLength.toFixed(2))); currentLength = 0;
             }
         }
     };
 
-    // Verifica a largura do perfil para decidir a lógica de corte
-    if (somaDosPerfis <= 120) {
-        console.log('Executando lógica de corte NORMAL.');
+    const { somasInicio, somasFim } = getInitialProfileWidths();
+
+    // Se a largura máxima do perfil cabe na chapa, usa o corte normal para TUDO.
+    if (somaDosPerfis <= larguraChapaCm) {
+        console.log('Executando lógica de corte NORMAL para todo o comprimento.');
         remainingLength = calcularEmbolsamento(totalLength);
         sheetsFixed = remainingLength;
         corteNormal(remainingLength);
     } else {
-        console.log('Executando lógica de corte para LARGURA > 120cm.');
-        const larguraChapa = 1.20; // Em metros
-        const tamanhoDoRecuo = parseFloat(dom.embolsamento.value) / 100 || 0; // Em metros
-        const caimentoPorMetro = 0.01; // 1cm por metro, ajuste se necessário
-        let larguraAtual = somaDosPerfis / 100; // Converter para metros
-        
-        // Esta lógica assume que o caimento começa a partir da 'somaDosPerfis'.
-        // Se a largura inicial já for maior que 120, todo o corte será com chapa "virada"
-        let tamanhoFeito = 0;
+        // Lógica HÍBRIDA: A largura final excede a da chapa.
+        console.log('Executando lógica de corte HÍBRIDA.');
+        let tamanhoFeitoComCorteNormal = 0;
 
-        // Se a largura inicial for menor que 120, calcula até onde pode ir
-        const { somasInicio, somasFim } = getInitialProfileWidths();
-        if(somasInicio < 120){
-             const aumentoTotal = (somasFim - somasInicio) / 100; // Aumento em metros
-             const taxaAumentoPorMetro = aumentoTotal / totalLength;
-             if (taxaAumentoPorMetro > 0) {
-                tamanhoFeito = ((1.20 - (somasInicio/100)) / taxaAumentoPorMetro);
-             }
+        // Verifica se a peça começa mais estreita que a chapa.
+        if (somasInicio < larguraChapaCm && somasFim > somasInicio) {
+            const aumentoTotal = somasFim - somasInicio;
+            const taxaAumentoPorMetro = aumentoTotal / totalLength;
+            
+            if (taxaAumentoPorMetro > 0) {
+                // Calcula em que comprimento a largura atinge o limite da chapa
+                tamanhoFeitoComCorteNormal = (larguraChapaCm - somasInicio) / taxaAumentoPorMetro;
+            }
         }
 
-        if (tamanhoFeito > 0 && tamanhoFeito < totalLength) {
-             console.log(`Corte normal para os primeiros ${tamanhoFeito.toFixed(2)}m`);
-             let initialLength = calcularEmbolsamento(tamanhoFeito);
-             corteNormal(initialLength);
-             remainingLength = totalLength - tamanhoFeito;
+        // Se uma parte pode ser feita com corte normal...
+        if (tamanhoFeitoComCorteNormal > 0 && tamanhoFeitoComCorteNormal < totalLength) {
+            console.log(`Corte normal para os primeiros ${tamanhoFeitoComCorteNormal.toFixed(2)}m`);
+            let initialLength = calcularEmbolsamento(tamanhoFeitoComCorteNormal);
+            corteNormal(initialLength);
+            remainingLength = totalLength - tamanhoFeitoComCorteNormal;
         } else {
+            // Se a peça já começa mais larga, todo o corte é com chapa virada.
             remainingLength = totalLength;
         }
-
-        console.log(`Restante para cortar em chapas de 1.20m: ${remainingLength.toFixed(2)}m`);
+        
+        // Aplica o corte de chapa virada para o restante do comprimento
+        console.log(`Iniciando corte com CHAPA VIRADA para os ${remainingLength.toFixed(2)}m restantes.`);
+        const larguraChapaVirada = larguraChapaCm / 100; // ex: 1.215m
+        const tamanhoDoRecuo = parseFloat(dom.embolsamento.value) / 100 || 0;
+        
         while (remainingLength > 0.01) {
-            if (remainingLength >= larguraChapa) {
-                sheets.push(larguraChapa);
-                remainingLength -= larguraChapa;
+            if (remainingLength >= larguraChapaVirada) {
+                sheets.push(larguraChapaVirada);
+                remainingLength -= larguraChapaVirada;
                 if (dom.checkRetreat.checked && remainingLength > 0.01) {
                     remainingLength += tamanhoDoRecuo;
                 }
@@ -157,34 +153,25 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
         const container = document.createElement('div');
         container.className = 'piece-container';
         const title = document.createElement('h3');
-        title.textContent = `PEÇA ${i + 1} (Chapa de ${sheetLength}m) | Posição: ${accumulatedLength.toFixed(1)}m à ${(accumulatedLength + sheetLength).toFixed(1)}m`;
+        title.textContent = `PEÇA ${i + 1} (Chapa de ${sheetLength.toFixed(3)}m) | Posição: ${accumulatedLength.toFixed(1)}m à ${(accumulatedLength + sheetLength).toFixed(1)}m`;
         
         const profileForThisPiece = JSON.parse(JSON.stringify(state.profiles));
-        let somasInicioPeca = 0;
-        let somasFimPeca = 0;
-        
-        const medidasInicio = [];
-        const medidasFim = [];
+        let somasInicioPeca = 0, somasFimPeca = 0;
+        const medidasInicio = [], medidasFim = [];
 
         profileForThisPiece.forEach(p => {
-            const startSeg = p.segments[0];
-            const endSeg = p.segments[2];
+            const startSeg = p.segments[0], endSeg = p.segments[2];
             let isTapered = false;
-            
             if (startSeg?.measurement && endSeg?.measurement && startSeg.measurement.text !== endSeg.measurement.text) {
                 isTapered = true;
             }
 
             if(isTapered){
-                const startWidth = parseFloat(startSeg.measurement.text);
-                const endWidth = parseFloat(endSeg.measurement.text);
+                const startWidth = parseFloat(startSeg.measurement.text), endWidth = parseFloat(endSeg.measurement.text);
                 const totalIncrease = endWidth - startWidth;
                 const slopeRate = totalLength > 0 ? totalIncrease / totalLength : 0;
-                const startIncrease = accumulatedLength * slopeRate;
-                const endIncrease = (accumulatedLength + sheetLength) * slopeRate;
-                
+                const startIncrease = accumulatedLength * slopeRate, endIncrease = (accumulatedLength + sheetLength) * slopeRate;
                 const embolsamentoAdjustment = (i > 0) ? (dom.embolsamento.value * (slopeRate / 100)) : 0;
-                
                 startSeg.measurement.text = (startWidth + startIncrease - embolsamentoAdjustment).toFixed(1);
                 endSeg.measurement.text = (startWidth + endIncrease).toFixed(1);
             }
@@ -193,16 +180,12 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
                 if (seg.measurement) {
                     const value = parseFloat(seg.measurement.text);
                     if (seg.measurement.type === 'variable_start') {
-                        medidasInicio.push(value.toFixed(1));
-                        somasInicioPeca += value;
+                        medidasInicio.push(value.toFixed(1)); somasInicioPeca += value;
                     } else if (seg.measurement.type === 'variable_end') {
-                        medidasFim.push(value.toFixed(1));
-                        somasFimPeca += value;
+                        medidasFim.push(value.toFixed(1)); somasFimPeca += value;
                     } else if (seg.measurement.type === 'static') {
-                         medidasInicio.push(value.toFixed(1));
-                         medidasFim.push(value.toFixed(1));
-                         somasInicioPeca += value;
-                         somasFimPeca += value;
+                         medidasInicio.push(value.toFixed(1)); medidasFim.push(value.toFixed(1));
+                         somasInicioPeca += value; somasFimPeca += value;
                     }
                 }
             });
@@ -228,22 +211,40 @@ function displayResultsAsDrawings(sheetSequence, totalLength) {
 export function handleCalculatePlan() {
     const totalLength = parseFloat(dom.totalLengthInput.value);
     if (isNaN(totalLength) || totalLength <= 0) {
-        alert("ERRO: Por favor, insira um 'Comprimento Total' válido.");
-        return;
+        alert("ERRO: Por favor, insira um 'Comprimento Total' válido."); return;
     }
-
     if (state.profiles.length === 0) {
-        alert("ERRO: Por favor, desenhe um perfil antes de calcular.");
-        return;
+        alert("ERRO: Por favor, desenhe um perfil antes de calcular."); return;
     }
 
-    // Calcula as larguras dinamicamente a partir do desenho
     const { somasInicio, somasFim } = getInitialProfileWidths();
     const somaDosPerfis = Math.max(somasInicio, somasFim);
+    let larguraChapaCm = 120; // Largura padrão da chapa
 
-    // Passa o valor dinâmico para a função de otimização
-    const result = optimizeSheetUsage(totalLength, somaDosPerfis);
-    
+    // Validação de limite físico da chapa (300cm)
+    if (somaDosPerfis > 300) {
+        alert(`ERRO: A largura do perfil (${somaDosPerfis.toFixed(1)}cm) excede a dimensão máxima da chapa (300cm).`);
+        return;
+    }
+
+    // Se a largura do perfil for maior que a largura padrão, aciona a lógica de "virar a chapa"
+    if (somaDosPerfis > larguraChapaCm) {
+        const resposta = prompt(`A largura do perfil (${somaDosPerfis.toFixed(1)}cm) excede o padrão de 120cm.\n\nIsso requer "virar" a chapa. Informe a largura EXATA da chapa a ser usada (em cm):`, "121.5");
+
+        if (resposta === null) {
+            console.log("Cálculo cancelado pelo usuário."); return;
+        }
+
+        const novaLargura = parseFloat(resposta);
+
+        if (isNaN(novaLargura) || novaLargura <= 0) {
+            alert("ERRO: Largura inválida. Por favor, insira um número válido."); return;
+        }
+        
+        larguraChapaCm = novaLargura;
+    }
+
+    const result = optimizeSheetUsage(totalLength, somaDosPerfis, larguraChapaCm);
     displayResultsAsDrawings(result.sheetSequence, result.finalLength > 0 ? result.finalLength : totalLength);
 }
 
