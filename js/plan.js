@@ -40,27 +40,27 @@ function optimizeSheetUsage(totalLength, somaDosPerfis, larguraChapaCm) {
 
     // Função interna para o cálculo de embolçamento, preservada como no original.
     const calcularEmbolsamento = (length) => {
-        if (dom.checkRetreat.checked) {
-            let sheetMetal3 = 0, sheetMetal2 = 0, fittingQuantity = 0;
-            if (length % 3 === 0) {
-                sheetMetal3 = length / 3;
-                fittingQuantity = sheetMetal3;
-            } else {
-                sheetMetal3 = Math.floor(length);
-                while (sheetMetal3 > 0 && sheetMetal3 % 3 !== 0) {
-                    sheetMetal3 -= 1;
-                    sheetMetal2 += 1.5;
+            if (dom.checkRetreat.checked) {
+                let sheetMetal3 = 0, sheetMetal2 = 0, fittingQuantity = 0;
+                if (length % 3 === 0) {
+                    sheetMetal3 += length / 3;
+                    fittingQuantity += sheetMetal3;
+                } else {
+                    sheetMetal3 = Math.floor(length);
+                    while (sheetMetal3 % 3 !== 0 || sheetMetal2 % 2 !== 0) {
+                        sheetMetal3 -= 1;
+                        sheetMetal2 += 1;
+                    }
+                     if (sheetMetal3 === 0) {
+                        sheetMetal2 = Math.ceil(length / 2)*2;
+                     }
+                    fittingQuantity = ((sheetMetal3 / 3) + (sheetMetal2 / 2))-1;
                 }
-                 if (sheetMetal3 === 0) {
-                    sheetMetal2 = Math.ceil(length / 2) * 2;
-                 }
-                fittingQuantity = (sheetMetal3 / 3) + (sheetMetal2 / 2);
+                const sheetTotal = (fittingQuantity * dom.embolsamento.value) / 100;
+                return length + sheetTotal;
             }
-            const sheetTotal = (fittingQuantity * dom.embolsamento.value) / 100;
-            return length + sheetTotal;
-        }
-        return length;
-    };
+            return length;
+        };
 
     // Função interna para o corte de chapas padrão (até 3m)
     const corteNormal = (length) => {
